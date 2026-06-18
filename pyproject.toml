@@ -1,0 +1,18 @@
+[project]
+name = "jepa-wm"
+version = "0.1.0"
+description = "Low-compute, JEPA-style world model: predict next latent (no pixel reconstruction), CEM-MPC planning in latent space, on PointMaze."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.7",
+    "gymnasium>=1.2",
+    "gymnasium-robotics>=1.4",
+    "mujoco>=3.9",
+    "numpy>=2.0,<2.5",
+    "matplotlib>=3.8",
+    "imageio>=2.30",
+]
+
+[tool.uv]
+package = false

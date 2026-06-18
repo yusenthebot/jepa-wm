@@ -1,0 +1,15 @@
+# envs / caches
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# local install artifacts (mirror-specific wheels; not for the public repo)
+wheelhouse/
+uv.lock
+
+# heavy run artifacts (keep small showcase ones: docs/*.gif, docs/*.png, metrics.jsonl)
+runs/data_*.npz
+runs/**/ckpt.pt
+runs/probe_*.png
+runs/*.log

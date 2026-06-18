@@ -1,0 +1,1 @@
+{"round": 1, "tag": "r1-floor", "success_rate": 0.625, "random_success_rate": 0.125, "mean_steps_to_goal": 58.88, "rollout_mse": 0.006744117010384798, "rankme": 7.982011318206787, "latent_dim": 8, "probe_r2": 0.7695685285870179, "latent_spatial_corr": 0.41627159237983546, "n_train_episodes": 200, "n_transitions": 37988, "minutes": 2.27}
