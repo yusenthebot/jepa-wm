@@ -33,11 +33,12 @@ Ship every round: (1) imagined-rollout GIF (detached decoder), (2) performance c
 - Observation trap: default agent ball ~3px -> every SSL objective ignored it
   (supervised probe R²=0.999 though). Fixed by enlarging the ball.
 
-## Next (Round 4 — the clear lever)
-Greedy Euclidean-latent cost caps UMaze (0.36). Learn a latent TEMPORAL-DISTANCE
-(quasimetric / goal-conditioned steps-to-go) and use it as the CEM terminal cost ->
-non-greedy obstacle planning -> push UMaze >0.5 and scale to Medium/Large mazes.
-Then: stochastic latent / SSM predictor / curiosity data.
+## Round 4 (EXPLORED, not yet a clean win — see progress.md)
+Learned temporal-distance CEM cost: naive temporal-gap regression helps a CHEAP short
+horizon (UMaze H=12: 0.50 vs 0.45) but hurts long horizon, within 20-ep noise. Infra
+landed: CEMPlanner(cost_fn=...) + closed_loop_eval(cost_fn=...) pluggable.
+NEXT to make it real: proper QUASIMETRIC (MRN/IQE, triangle ineq) or TD/contrastive
+distance + 50+ eval episodes. Alternatives: stochastic latent / SSM predictor / Medium maze.
 
 ## Resume (cold start)
 Read progress.md + this file + git log. Run with .venv/bin/python (NOT uv run on the
