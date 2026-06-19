@@ -22,6 +22,7 @@ class CEMPlanner:
         init_std: float = 0.5,
         action_dim: int = 2,
         device: str = "cpu",
+        cost_fn=None,
     ):
         self.pred = predictor
         self.h = horizon
@@ -31,6 +32,9 @@ class CEMPlanner:
         self.init_std = init_std
         self.action_dim = action_dim
         self.device = device
+        # cost_fn(preds (N,H,D), z_goal (D,)) -> (N,). Default: Euclidean latent distance.
+        # Round 4 passes a learned temporal-distance (quasimetric) here for obstacle mazes.
+        self.cost_fn = cost_fn
 
     @torch.no_grad()
     def _cost(self, z0: torch.Tensor, actions: torch.Tensor, z_goal: torch.Tensor) -> torch.Tensor:
@@ -38,6 +42,8 @@ class CEMPlanner:
         n = actions.shape[0]
         z0n = z0.unsqueeze(0).expand(n, -1)
         preds = self.pred.rollout(z0n, actions)          # (N, H, D)
+        if self.cost_fn is not None:
+            return self.cost_fn(preds, z_goal)
         d = torch.linalg.norm(preds - z_goal.unsqueeze(0).unsqueeze(0), dim=-1)  # (N, H)
         terminal = d[:, -1]
         mean_progress = d.mean(dim=1)

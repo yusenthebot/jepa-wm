@@ -19,7 +19,7 @@ def _to_z(encoder, img_chw: np.ndarray, device: str) -> torch.Tensor:
 @torch.no_grad()
 def closed_loop_eval(encoder, predictor, cfg: Config, device: str,
                      n_episodes: int, seed_offset: int = 10_000,
-                     capture_traj: bool = True, log=print):
+                     capture_traj: bool = True, log=print, cost_fn=None):
     encoder.eval(); predictor.eval()
     env = PointMazePixels(cfg.env_id, img_size=cfg.img_size,
                           max_episode_steps=cfg.max_episode_steps,
@@ -28,7 +28,8 @@ def closed_loop_eval(encoder, predictor, cfg: Config, device: str,
     planner = CEMPlanner(
         predictor, horizon=cfg.plan_horizon, iters=cfg.cem_iters,
         samples=cfg.cem_samples, elite_frac=cfg.cem_elite_frac,
-        init_std=cfg.cem_init_std, action_dim=cfg.action_dim, device=device)
+        init_std=cfg.cem_init_std, action_dim=cfg.action_dim, device=device,
+        cost_fn=cost_fn)
 
     successes, steps_to_goal = [], []
     sample_traj = None

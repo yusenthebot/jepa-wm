@@ -58,6 +58,19 @@ frontiers, ranked ambition×feasibility:
    curriculum; harder mazes (UMaze/Medium) needing obstacle-aware planning;
    curiosity-driven data.
 
+## Round 4 exploration — learned temporal-distance cost (PARTIAL, not a clean win)
+Hypothesis: a learned latent d(z_a,z_b)~steps-to-go as the CEM terminal cost beats greedy
+Euclidean on obstacles. scripts/spike_quasimetric.py (naive: regress the temporal gap).
+Result (UMaze, 20 eval eps, noisy): random 0.20.
+  H=12: euclidean 0.45, temporal-distance 0.50   (helps at SHORT/cheap horizon)
+  H=40: euclidean 0.35, temporal-distance 0.25   (HURTS — long rollout already avoids wall)
+Read: the value of a learned distance is letting a CHEAP short horizon plan as well as an
+expensive long one — but the naive k-regression gain (0.50 vs 0.45) is within noise, and it
+adds noise where the rollout already handles the obstacle. NOT published as a round.
+NEXT to make it a real win: proper QUASIMETRIC (MRN/IQE, triangle inequality) or a
+TD/contrastive distance (not noisy k-regression) + 50+ eval episodes. Infra is in place:
+CEMPlanner(cost_fn=...) and closed_loop_eval(..., cost_fn=...) are pluggable.
+
 ## Frontier
 - Current ceiling: UMaze obstacle, long-horizon CEM, success 0.36 vs random 0.20 (R3).
   World model DOES plan around the wall (horizon ablation proves it) but greedy
