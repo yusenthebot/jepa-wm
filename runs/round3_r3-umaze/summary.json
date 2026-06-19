@@ -1,0 +1,15 @@
+{
+  "round": 3,
+  "tag": "r3-umaze",
+  "success_rate": 0.36,
+  "random_success_rate": 0.2,
+  "mean_steps_to_goal": 95.0,
+  "rollout_mse": 0.0076817721128463745,
+  "rankme": 7.80714750289917,
+  "latent_dim": 8,
+  "probe_r2": 0.8616445665386241,
+  "latent_spatial_corr": 0.5107465748009823,
+  "n_train_episodes": 150,
+  "n_transitions": 41421,
+  "minutes": 4.03
+}

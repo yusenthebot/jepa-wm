@@ -35,15 +35,22 @@ def main():
     ap.add_argument("--quick", action="store_true", help="tiny smoke-test config")
     ap.add_argument("--reuse-data", action="store_true")
     ap.add_argument("--eval-episodes", type=int, default=None)
-    ap.add_argument("--preset", choices=["floor", "distractor"], default="floor",
+    ap.add_argument("--preset", choices=["floor", "distractor", "umaze"], default="floor",
                     help="floor = big ball + aug-VICReg; distractor = small ball + "
-                         "spatial-softmax + multi-step inverse dynamics")
+                         "spatial-softmax + multi-step inverse; umaze = obstacle maze + "
+                         "long-horizon CEM")
     args = ap.parse_args()
 
     if args.preset == "distractor":
         # hard small-ball observation: the controllable agent is a tiny distractor.
         cfg = Config(enlarge_agent=False, encoder_type="ssm",
                      encoder_objective="inverse", inverse_k=24, latent_dim=8)
+    elif args.preset == "umaze":
+        # obstacle maze: greedy short-horizon CEM walks into the wall; long horizon lets
+        # the learned dynamics find the detour. Big ball isolates the planning challenge.
+        cfg = Config(env_id="PointMaze_UMaze-v3", cam_distance=4.0,
+                     max_episode_steps=200, n_train_episodes=150,
+                     plan_horizon=40, cem_samples=256, cem_iters=4, n_eval_episodes=25)
     else:
         cfg = Config()
     if args.quick:
@@ -71,7 +78,8 @@ def main():
         print(f"[data] collecting {cfg.n_train_episodes} random episodes ({ball} ball)...")
         episodes = collect_random(cfg.env_id, cfg.n_train_episodes, cfg.img_size,
                                   cfg.max_episode_steps, seed=cfg.seed,
-                                  enlarge_agent=cfg.enlarge_agent, agent_size=cfg.agent_size)
+                                  enlarge_agent=cfg.enlarge_agent, agent_size=cfg.agent_size,
+                                  cam_distance=cfg.cam_distance)
         save_episodes(episodes, str(data_path))
     n_trans = sum(e.actions.shape[0] for e in episodes)
     print(f"[data] {len(episodes)} episodes, {n_trans} transitions")

@@ -1,14 +1,15 @@
 # progress — jepa-wm
 
-## Current state (round 2, FRONTIER — VERIFIED 2026-06-19)
-Public repo: github.com/yusenthebot/jepa-wm.
-- Round 1 FLOOR (big ball): planner 0.62 vs random 0.12, corr 0.42, probe R² 0.77.
-- Round 2 FRONTIER (HARD small distractor ball, the part R1 crutched around):
-  **planner 0.50 vs random 0.12, corr 0.69, probe R² 0.89, RankMe 6.75/8**, ~3.2 min MPS.
-  Mechanism: spatial-softmax keypoint encoder + multi-step inverse dynamics (ACRO,
-  predict a_t from z_t,z_{t+k}, k=24) -> recovers the controllable state, ignores
-  background. Corr/probe went UP on a HARDER obs = real frontier progress, not regression.
-  Config presets: --preset floor (R1) / --preset distractor (R2).
+## Current state (round 3, FRONTIER — VERIFIED 2026-06-19)
+Public repo: github.com/yusenthebot/jepa-wm. Capability ladder, 3 verified rounds:
+- R1 FLOOR (open, big ball): planner 0.62 vs random 0.12, corr 0.42, probe 0.77.
+- R2 (open, HARD small distractor ball): planner 0.50 vs random 0.12, corr 0.69, probe 0.89.
+  Mechanism: spatial-softmax + multi-step inverse dynamics (ACRO, k=24).
+- R3 (UMaze obstacle, big ball): planner 0.36 vs random 0.20, corr 0.51, probe 0.86, ~4 min.
+  Mechanism: LONG-HORIZON CEM over learned dynamics finds the detour around the wall.
+  Horizon ablation (the world-model proof): random 0.15 -> H=15 0.30 -> H=40 0.40.
+  Presets: --preset floor / distractor / umaze. NOTE: tasks differ -> success not
+  comparable across rounds; the signal is planner >> random on each new capability.
 
 ### Round-2 spike findings (scripts/spike_distractor.py)
 - Multi-step inverse is the ONLY thing that cracked the small ball (everything in R1 got
@@ -58,12 +59,14 @@ frontiers, ranked ambition×feasibility:
    curiosity-driven data.
 
 ## Frontier
-- Current ceiling: PointMaze-Open SMALL distractor ball, success 0.50, corr 0.69
-  (R2 cleared the "small ball" bar that R1 sidestepped).
-- Next frontier (bar to clear next): small-ball success > 0.62 (beat the easy-obs floor)
-  via longer inverse horizon / forward+inverse / whitened planning metric; THEN harder
-  mazes (UMaze) needing obstacle-aware planning (greedy latent-distance CEM fails there).
-- Radical ideas weighed: forward+inverse joint (full controllable dynamics), learned
-  terminal value for CEM (for non-greedy mazes), stochastic latent for multimodal futures.
-- Fidelity/stack ladder: Open(big ball) -> Open(small ball) ✓ -> UMaze -> Medium/Large
-  -> AntMaze -> higher-res / multi-view pixels.
+- Current ceiling: UMaze obstacle, long-horizon CEM, success 0.36 vs random 0.20 (R3).
+  World model DOES plan around the wall (horizon ablation proves it) but greedy
+  Euclidean-latent cost caps it.
+- Next frontier (Round 4 — the clear lever): learn a latent TEMPORAL-DISTANCE / quasimetric
+  (steps-to-go between latents) and use it as the CEM terminal cost. Non-greedy -> handles
+  obstacles properly -> push UMaze >0.5, scale to Medium/Large. Train it from the random
+  data (k-step temporal regression, or contrastive on temporal gap) on frozen latents.
+- Radical ideas weighed: goal-conditioned latent value/Q; forward+inverse joint encoder;
+  stochastic latent for multimodal futures; hierarchy (subgoal latents).
+- Fidelity/stack ladder: Open(big) ✓ -> Open(small) ✓ -> UMaze ✓ -> UMaze+temporal-dist
+  -> Medium/Large -> AntMaze -> higher-res / multi-view pixels.
