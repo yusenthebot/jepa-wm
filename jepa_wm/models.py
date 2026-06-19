@@ -47,6 +47,43 @@ class Encoder(nn.Module):
         return z
 
 
+class SpatialSoftmaxEncoder(nn.Module):
+    """Keypoint encoder: outputs the expected (x,y) of K feature-map channels via
+    a spatial softmax (Finn et al. 2016). Architectural bias toward OBJECT
+    COORDINATES — the right prior when the controllable thing is a small object
+    in a distractor-heavy frame. latent_dim = 2*K."""
+
+    def __init__(self, img_size: int, latent_dim: int, channels=(32, 64, 64),
+                 normalize: bool = False, temp: float = 0.5):
+        super().__init__()
+        assert latent_dim % 2 == 0, "spatial-softmax latent_dim must be even (2*K)"
+        self.K = latent_dim // 2
+        self.temp = temp
+        self.normalize = normalize
+        layers = []
+        c_in = 3
+        for c_out in channels:
+            layers += [nn.Conv2d(c_in, c_out, 3, 2, 1), nn.GroupNorm(8, c_out), nn.SiLU()]
+            c_in = c_out
+        self.conv = nn.Sequential(*layers)
+        self.red = nn.Conv2d(c_in, self.K, 1)
+        s = img_size // (2 ** len(channels))
+        g = torch.linspace(-1, 1, s)
+        self.register_buffer("gx", g.view(1, 1, 1, s))
+        self.register_buffer("gy", g.view(1, 1, s, 1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.red(self.conv(x))                       # (B, K, s, s)
+        b, k, s, _ = h.shape
+        a = F.softmax(h.view(b, k, -1) / self.temp, dim=-1).view(b, k, s, s)
+        ex = (a * self.gx).sum((2, 3))
+        ey = (a * self.gy).sum((2, 3))
+        z = torch.cat([ex, ey], dim=-1)                  # (B, 2K)
+        if self.normalize:
+            z = F.normalize(z, dim=-1)
+        return z
+
+
 class Predictor(nn.Module):
     """Latent dynamics: z_{t+1} ~ f(z_t, a_t) via a GRUCell core."""
 

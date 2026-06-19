@@ -1,9 +1,20 @@
 # progress — jepa-wm
 
-## Current state (round 1, FLOOR — VERIFIED 2026-06-19)
-Full JEPA-style closed loop works on PointMaze-Open: **planner 0.62 vs random 0.12**,
-verified by real planning success rate (not loss). latent-spatial corr 0.42, probe R²
-0.77, RankMe 8.0/8 (no collapse), rollout MSE 0.007, ~2.3 min on Mac MPS.
+## Current state (round 2, FRONTIER — VERIFIED 2026-06-19)
+Public repo: github.com/yusenthebot/jepa-wm.
+- Round 1 FLOOR (big ball): planner 0.62 vs random 0.12, corr 0.42, probe R² 0.77.
+- Round 2 FRONTIER (HARD small distractor ball, the part R1 crutched around):
+  **planner 0.50 vs random 0.12, corr 0.69, probe R² 0.89, RankMe 6.75/8**, ~3.2 min MPS.
+  Mechanism: spatial-softmax keypoint encoder + multi-step inverse dynamics (ACRO,
+  predict a_t from z_t,z_{t+k}, k=24) -> recovers the controllable state, ignores
+  background. Corr/probe went UP on a HARDER obs = real frontier progress, not regression.
+  Config presets: --preset floor (R1) / --preset distractor (R2).
+
+### Round-2 spike findings (scripts/spike_distractor.py)
+- Multi-step inverse is the ONLY thing that cracked the small ball (everything in R1 got
+  corr~0.05). Larger k = bigger displacement = stronger signal: k=8 corr~0.2, k=24 corr~0.69.
+- Spatial-softmax (K=4 keypoints, dim=8) >> plain CNN for the keypoint/metric quality.
+- Predict a_t ONLY (not all-K actions) — all-K + VICReg was noisier and hurt.
 
 ### Final architecture
 - Encoder: augmentation-VICReg (two photometric views of the same frame, invariance +
@@ -47,8 +58,12 @@ frontiers, ranked ambition×feasibility:
    curiosity-driven data.
 
 ## Frontier
-- Current ceiling: PointMaze-Open, prominent ball, success 0.62, corr 0.42.
-- Next frontier (the bar to clear next): same success with a SMALL distractor ball
-  (real representation-learning difficulty), or success > 0.8 on the easy obs.
-- Fidelity/stack ladder: Open(easy obs) -> Open(small ball) -> UMaze -> Medium/Large
+- Current ceiling: PointMaze-Open SMALL distractor ball, success 0.50, corr 0.69
+  (R2 cleared the "small ball" bar that R1 sidestepped).
+- Next frontier (bar to clear next): small-ball success > 0.62 (beat the easy-obs floor)
+  via longer inverse horizon / forward+inverse / whitened planning metric; THEN harder
+  mazes (UMaze) needing obstacle-aware planning (greedy latent-distance CEM fails there).
+- Radical ideas weighed: forward+inverse joint (full controllable dynamics), learned
+  terminal value for CEM (for non-greedy mazes), stochastic latent for multimodal futures.
+- Fidelity/stack ladder: Open(big ball) -> Open(small ball) ✓ -> UMaze -> Medium/Large
   -> AntMaze -> higher-res / multi-view pixels.

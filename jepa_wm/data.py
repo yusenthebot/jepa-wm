@@ -19,8 +19,10 @@ class Episode:
 
 
 def collect_random(env_id: str, n_episodes: int, img_size: int,
-                   max_steps: int, seed: int = 0) -> list[Episode]:
-    env = PointMazePixels(env_id, img_size=img_size, max_episode_steps=max_steps, seed=seed)
+                   max_steps: int, seed: int = 0, enlarge_agent: bool = True,
+                   agent_size: float = 0.5) -> list[Episode]:
+    env = PointMazePixels(env_id, img_size=img_size, max_episode_steps=max_steps,
+                          seed=seed, enlarge_agent=enlarge_agent, agent_size=agent_size)
     rng = np.random.default_rng(seed)
     episodes: list[Episode] = []
     for ep in range(n_episodes):

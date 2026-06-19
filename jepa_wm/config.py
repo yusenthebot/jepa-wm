@@ -11,6 +11,8 @@ class Config:
     img_size: int = 64
     max_episode_steps: int = 200
     cam_distance: float = 6.5     # top-down camera zoom (ball must be prominent)
+    enlarge_agent: bool = True    # floor crutch: big bright ball. False = hard small-ball
+    agent_size: float = 0.5       # agent site radius when enlarge_agent
 
     # data
     n_train_episodes: int = 200
@@ -31,6 +33,11 @@ class Config:
     # failure of joint encoder+predictor training (corr(latent,xy)~0 -> planner=random).
     enc_epochs: int = 12
     enc_lr: float = 3e-4
+    # encoder architecture + objective (floor defaults; "distractor" preset overrides)
+    encoder_type: str = "cnn"          # "cnn" | "ssm" (spatial-softmax keypoints)
+    encoder_objective: str = "vicreg"  # "vicreg" | "inverse" (multi-step inverse dyn)
+    inverse_k: int = 24                # ACRO horizon: predict a_t from (z_t, z_{t+k})
+    inverse_hidden: int = 256
     # Positive pairs = two PHOTOMETRIC augmentations of the SAME frame. Invariance
     # keeps each position's identity; variance-across-batch separates different
     # positions; small latent_dim keeps the metric un-diluted. Background is static

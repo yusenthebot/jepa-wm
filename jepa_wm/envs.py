@@ -24,14 +24,16 @@ def _resize_chw(img: np.ndarray, size: int) -> np.ndarray:
 
 class PointMazePixels:
     def __init__(self, env_id: str, img_size: int = 64, max_episode_steps: int = 200,
-                 seed: int = 0, cam_distance: float = 6.5):
+                 seed: int = 0, cam_distance: float = 6.5, enlarge_agent: bool = True,
+                 agent_size: float = 0.5):
         self.env = gym.make(env_id, render_mode="rgb_array",
                             continuing_task=False, max_episode_steps=max_episode_steps)
         self.img_size = img_size
         self.action_dim = int(self.env.action_space.shape[0])
         self._seed = seed
         self._last_obs = None
-        self._enlarge_agent()
+        if enlarge_agent:
+            self._enlarge_agent(size=agent_size)
         self._set_topdown_camera(cam_distance)
 
     def _enlarge_agent(self, size: float = 0.5, rgba=(1.0, 0.9, 0.1, 1.0)):

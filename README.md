@@ -5,7 +5,7 @@
 ![python](https://img.shields.io/badge/python-3.12-blue)
 ![pytorch](https://img.shields.io/badge/PyTorch-MPS-ee4c2c)
 ![license](https://img.shields.io/badge/license-MIT-green)
-![status](https://img.shields.io/badge/round_1-floor_verified-success)
+![status](https://img.shields.io/badge/rounds-2_verified-success)
 
 Most pixel-based world models spend their compute on a **decoder** that reconstructs
 every future pixel. JEPA-style models drop that: they learn dynamics by predicting the
@@ -38,6 +38,30 @@ stop-gradient and never trains the world model.
 *Left: ground truth. Right: frames decoded from the imagined latent rollout (open-loop
 from the first frame). The decoder is detached — this is the model's imagination, not a
 training signal.*
+
+**Round 2 (frontier) — distractor-robust planning on the HARD small ball:**
+
+The floor crutched on a big bright ball. Round 2 removes the crutch: the agent is back to
+a ~3-pixel dot in a static, distractor-heavy frame — the case where *every* objective in
+round 1 failed (corr ≈ 0.05). It is solved with a different **mechanism**:
+**spatial-softmax keypoints + multi-step inverse dynamics** (ACRO-style: predict `a_t`
+from `(z_t, z_{t+k})` with large `k=24`). Predicting the action forces the encoder to
+model only the **controllable** state and ignore the background.
+
+| metric | round 1 (big ball) | **round 2 (small ball)** |
+|---|---:|---:|
+| planning success (vs random 0.12) | 0.62 | **0.50** |
+| **latent↔spatial corr** | 0.42 | **0.69** ↑ |
+| xy probe R² | 0.77 | **0.89** ↑ |
+| RankMe / 8 | 8.0 | 6.75 |
+
+Round 2 solves a *harder* observation with a *higher* representation quality (corr,
+probe R²) — the success drop reflects task difficulty, not regression. The capability
+metric (corr) is the honest measure of progress.
+
+![imagined rollout — small ball](docs/imagined_rollout_distractor.gif)
+
+![performance curves](docs/performance.png)
 
 ---
 
@@ -142,10 +166,13 @@ We watch, every round:
 
 ## Method
 
-- **Encoder — augmentation-VICReg.** Two photometric views (brightness/contrast/noise) of
-  the *same* frame are pulled together (invariance); variance + covariance spread
-  different frames and prevent collapse. Output is a small (dim 8) latent. No pixels
-  reconstructed.
+- **Encoder — two interchangeable objectives** (`--preset floor | distractor`), both
+  reconstruction-free, both producing a small (dim 8) latent:
+  - *augmentation-VICReg* (round 1): two photometric views of the same frame pulled
+    together; variance + covariance spread different frames and prevent collapse.
+  - *spatial-softmax + multi-step inverse dynamics* (round 2, distractor-robust): a
+    keypoint encoder, trained to predict `a_t` from `(z_t, z_{t+k})`. Predicting the
+    action forces the encoder to model only the controllable agent, ignoring background.
 - **Latent dynamics — frozen-feature predictor.** Encoder is frozen; its latents are
   cached; a `GRUCell` predictor learns `z_{t+1} = z_t + g(z_t, a_t)` (residual / identity
   prior). Manual rollout loop — reliable on MPS and exactly what CEM batch-rolls.
@@ -166,9 +193,11 @@ Requires [`uv`](https://docs.astral.sh/uv/) and a Mac (MPS) or any CPU/CUDA box.
 uv sync                                                              # install deps
 
 uv run python scripts/probe_env.py                                  # sanity: render + goal-image trick
-uv run python scripts/run_round.py --round 1 --tag r1-floor         # full round (~2-3 min on MPS)
-uv run python scripts/run_round.py --round 1 --tag smoke --quick    # fast smoke test
-uv run python scripts/sweep_latent_dim.py 4,8,16,32                 # reproduce the latent-dim study
+uv run python scripts/run_round.py --round 1 --tag r1-floor                       # round 1 floor (big ball)
+uv run python scripts/run_round.py --round 2 --tag r2-distractor --preset distractor  # round 2 (hard small ball)
+uv run python scripts/run_round.py --round 1 --tag smoke --quick                  # fast smoke test
+uv run python scripts/sweep_latent_dim.py 4,8,16,32                               # latent-dim study (round 1)
+uv run python scripts/spike_distractor.py                                         # distractor-mechanism study (round 2)
 ```
 
 Outputs land in `runs/` (heavy data + checkpoints are git-ignored); showcase artifacts
@@ -190,26 +219,26 @@ jepa_wm/
   metrics.py    RankMe, linear-probe R²
   viz.py        imagined-rollout GIF, performance curves
 scripts/
-  probe_env.py        PointMaze API / render sanity check
-  run_round.py        one full round, end to end
-  sweep_latent_dim.py latent-dim vs corr / probe-R² study
-  diagnose.py         latent-distance vs spatial-distance diagnostic
+  probe_env.py         PointMaze API / render sanity check
+  run_round.py         one full round, end to end (--preset floor | distractor)
+  sweep_latent_dim.py  latent-dim vs corr / probe-R² study (round 1)
+  spike_distractor.py  distractor-robust mechanism study (round 2)
+  diagnose.py          latent-distance vs spatial-distance diagnostic
 ```
 
 ---
 
 ## Roadmap (evolving)
 
-Round 1 is the **floor**, not the goal. Later rounds diverge on **mechanism, not model
-size**:
+Each round diverges on **mechanism, not model size**:
 
-- shrink the agent ball back down → **distractor-robust** representation (the hard,
-  open part this floor sidesteps)
-- stochastic / variational latent dynamics (multimodal futures, uncertainty)
-- SSM / Mamba or tiny-transformer predictor (long-range latent dynamics)
-- rollout-horizon **curriculum** (k: 4 → 8 → 16) for long-horizon planning
-- **curiosity**-driven self-collected data; harder mazes (UMaze → Medium) needing
-  obstacle-aware planning
+- ✅ **Round 1** — floor: aug-VICReg encoder + frozen GRU predictor + CEM-MPC (big ball).
+- ✅ **Round 2** — distractor-robust: spatial-softmax + multi-step inverse dynamics on the
+  hard small ball (the part round 1 crutched around).
+- ⬜ push small-ball success past the floor (longer inverse horizon, forward+inverse).
+- ⬜ stochastic / variational latent dynamics (multimodal futures, uncertainty).
+- ⬜ SSM / Mamba predictor; rollout-horizon curriculum for long-horizon planning.
+- ⬜ harder mazes (UMaze → Medium) needing obstacle-aware planning; curiosity-driven data.
 
 See `progress.md` for the running log and frontier ladder.
 
@@ -221,6 +250,8 @@ See `progress.md` for the running log and frontier ladder.
 - Bardes et al., *VICReg* (2022); Grill et al., *BYOL* (2020) — non-contrastive SSL.
 - Garrido et al., *RankMe* (2023) — effective-rank representation-quality metric.
 - Finn et al., *Deep Spatial Autoencoders for Visuomotor Learning* (2016) — pixels→state.
+- Lamb et al., *ACRO / Guaranteed Discovery of Control-Endogenous States* (2022) —
+  multi-step inverse dynamics for distractor-robust control representations.
 - Chua et al., *PETS* (2018); Hafner et al., *PlaNet/Dreamer* — latent dynamics + MPC.
 
 ## License

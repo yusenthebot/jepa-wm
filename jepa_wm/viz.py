@@ -78,26 +78,30 @@ def performance_curves(metrics_path: str, out_path: str):
     if not rows:
         return None
     rounds = [r["round"] for r in rows]
+    tags = [r.get("tag", "") for r in rows]
 
-    fig, axes = plt.subplots(1, 3, figsize=(13, 3.6))
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.8))
+    # success vs random — annotate each point with its task (obs differs across rounds)
     axes[0].plot(rounds, [r.get("success_rate") for r in rows], "o-", color="#1b7837", label="planner")
-    if any("random_success_rate" in r for r in rows):
-        axes[0].plot(rounds, [r.get("random_success_rate") for r in rows], "s--",
-                     color="#999999", label="random")
-    axes[0].set_title("planning success rate"); axes[0].set_ylim(-0.02, 1.02)
-    axes[0].set_xlabel("round"); axes[0].legend(fontsize=8)
+    axes[0].plot(rounds, [r.get("random_success_rate") for r in rows], "s--",
+                 color="#999999", label="random")
+    for x, y, t in zip(rounds, [r.get("success_rate") for r in rows], tags):
+        axes[0].annotate(t, (x, y), fontsize=7, ha="center", va="bottom", color="#1b7837")
+    axes[0].set_title("planning success rate (vs random)"); axes[0].set_ylim(-0.02, 1.05)
+    axes[0].set_xlabel("round"); axes[0].set_xticks(rounds); axes[0].legend(fontsize=8)
 
-    axes[1].plot(rounds, [r.get("rollout_mse") for r in rows], "o-", color="#b2182b")
-    axes[1].set_title("multi-step latent rollout MSE"); axes[1].set_xlabel("round")
+    # the capability metric: latent distance vs spatial distance (what CEM needs)
+    corr = [r.get("latent_spatial_corr") for r in rows]
+    axes[1].plot(rounds, corr, "o-", color="#b35806")
+    axes[1].set_title("latent↔spatial corr  (planning signal)"); axes[1].set_ylim(0, 1)
+    axes[1].set_xlabel("round"); axes[1].set_xticks(rounds)
 
     axes[2].plot(rounds, [r.get("rankme") for r in rows], "o-", color="#2166ac", label="RankMe")
-    if any("probe_r2" in r for r in rows):
-        ax2 = axes[2].twinx()
-        ax2.plot(rounds, [r.get("probe_r2") for r in rows], "^--", color="#762a83",
-                 label="xy probe R²")
-        ax2.set_ylabel("xy probe R²", color="#762a83"); ax2.set_ylim(-0.05, 1.05)
-    axes[2].set_title("RankMe effective rank"); axes[2].set_xlabel("round")
-    axes[2].set_ylabel("RankMe", color="#2166ac")
+    ax2 = axes[2].twinx()
+    ax2.plot(rounds, [r.get("probe_r2") for r in rows], "^--", color="#762a83", label="xy probe R²")
+    ax2.set_ylabel("xy probe R²", color="#762a83"); ax2.set_ylim(-0.05, 1.05)
+    axes[2].set_title("RankMe (no collapse) + probe R²"); axes[2].set_xlabel("round")
+    axes[2].set_xticks(rounds); axes[2].set_ylabel("RankMe", color="#2166ac")
 
     fig.tight_layout()
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)

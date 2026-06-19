@@ -35,12 +35,21 @@ def main():
     ap.add_argument("--quick", action="store_true", help="tiny smoke-test config")
     ap.add_argument("--reuse-data", action="store_true")
     ap.add_argument("--eval-episodes", type=int, default=None)
+    ap.add_argument("--preset", choices=["floor", "distractor"], default="floor",
+                    help="floor = big ball + aug-VICReg; distractor = small ball + "
+                         "spatial-softmax + multi-step inverse dynamics")
     args = ap.parse_args()
 
-    cfg = Config()
+    if args.preset == "distractor":
+        # hard small-ball observation: the controllable agent is a tiny distractor.
+        cfg = Config(enlarge_agent=False, encoder_type="ssm",
+                     encoder_objective="inverse", inverse_k=24, latent_dim=8)
+    else:
+        cfg = Config()
     if args.quick:
-        cfg = Config(n_train_episodes=12, enc_epochs=2, pred_epochs=2, dec_epochs=2,
-                     n_eval_episodes=5, cem_samples=64, cem_iters=2, plan_horizon=8)
+        cfg = Config(**{**cfg.to_dict(), "n_train_episodes": 12, "enc_epochs": 2,
+                        "pred_epochs": 2, "dec_epochs": 2, "n_eval_episodes": 5,
+                        "cem_samples": 64, "cem_iters": 2, "plan_horizon": 8})
     if args.eval_episodes is not None:
         cfg = Config(**{**cfg.to_dict(), "n_eval_episodes": args.eval_episodes})
 
@@ -52,15 +61,17 @@ def main():
     rdir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 
-    # 1. data
-    data_path = RUNS / f"data_{cfg.env_id}_{cfg.n_train_episodes}_{cfg.img_size}.npz"
+    # 1. data  (ball tag so big-ball and small-ball datasets don't collide)
+    ball = "big" if cfg.enlarge_agent else "small"
+    data_path = RUNS / f"data_{cfg.env_id}_{cfg.n_train_episodes}_{cfg.img_size}_{ball}.npz"
     if args.reuse_data and data_path.exists():
         print(f"[data] reuse {data_path}")
         episodes = load_episodes(str(data_path))
     else:
-        print(f"[data] collecting {cfg.n_train_episodes} random episodes...")
+        print(f"[data] collecting {cfg.n_train_episodes} random episodes ({ball} ball)...")
         episodes = collect_random(cfg.env_id, cfg.n_train_episodes, cfg.img_size,
-                                  cfg.max_episode_steps, seed=cfg.seed)
+                                  cfg.max_episode_steps, seed=cfg.seed,
+                                  enlarge_agent=cfg.enlarge_agent, agent_size=cfg.agent_size)
         save_episodes(episodes, str(data_path))
     n_trans = sum(e.actions.shape[0] for e in episodes)
     print(f"[data] {len(episodes)} episodes, {n_trans} transitions")

@@ -15,7 +15,17 @@ import torch.nn.functional as F
 from .config import Config
 from .data import Episode, sample_frames_xy
 from .metrics import linear_probe_r2, rankme
-from .models import Decoder, Encoder, Predictor, vicreg_loss
+import torch.nn as nn
+
+from .models import Decoder, Encoder, Predictor, SpatialSoftmaxEncoder, vicreg_loss
+
+
+def make_encoder(cfg: Config, device: str):
+    if cfg.encoder_type == "ssm":
+        return SpatialSoftmaxEncoder(cfg.img_size, cfg.latent_dim,
+                                     normalize=cfg.normalize_latent).to(device)
+    return Encoder(cfg.img_size, cfg.latent_dim, cfg.enc_channels,
+                   normalize=cfg.normalize_latent).to(device)
 
 
 def _photometric_aug(x: torch.Tensor, cfg: Config, rng_t: torch.Generator) -> torch.Tensor:
@@ -42,7 +52,50 @@ def pick_device(prefer: str) -> str:
 # --------------------------------------------------------------------------- #
 # Phase 1: encoder (temporal VICReg)
 # --------------------------------------------------------------------------- #
-def train_encoder(episodes: list[Episode], cfg: Config, device: str, log=print) -> Encoder:
+def train_encoder(episodes: list[Episode], cfg: Config, device: str, log=print):
+    """Dispatch to the configured encoder objective."""
+    if cfg.encoder_objective == "inverse":
+        return train_encoder_inverse(episodes, cfg, device, log)
+    return train_encoder_vicreg(episodes, cfg, device, log)
+
+
+def train_encoder_inverse(episodes: list[Episode], cfg: Config, device: str, log=print):
+    """Multi-step inverse dynamics (ACRO-style): predict a_t from (z_t, z_{t+k}).
+    To infer the action, the encoder must encode the CONTROLLABLE state (the agent)
+    and can ignore the static background — the fix for the small distractor ball.
+    Large k gives a bigger displacement = stronger signal. Pairs with spatial-softmax
+    keypoints (encoder_type='ssm') for an object-coordinate inductive bias."""
+    rng = np.random.default_rng(cfg.seed)
+    images = [torch.from_numpy(e.images) for e in episodes]
+    acts = [torch.from_numpy(e.actions).float() for e in episodes]
+    k = cfg.inverse_k
+    idx = np.asarray([(ei, t) for ei, e in enumerate(episodes)
+                      for t in range(e.actions.shape[0] - k)])
+    encoder = make_encoder(cfg, device)
+    inv = nn.Sequential(nn.Linear(2 * cfg.latent_dim, cfg.inverse_hidden), nn.SiLU(),
+                        nn.Linear(cfg.inverse_hidden, cfg.action_dim)).to(device)
+    opt = torch.optim.AdamW(list(encoder.parameters()) + list(inv.parameters()), lr=cfg.enc_lr)
+    steps = max(1, len(idx) // cfg.batch_size)
+    log(f"[enc] multi-step inverse (k={k}, {cfg.encoder_type}) pairs={len(idx)} steps/epoch={steps}")
+    for epoch in range(cfg.enc_epochs):
+        tot = 0.0
+        for _ in range(steps):
+            pick = rng.integers(0, len(idx), size=cfg.batch_size)
+            o1 = torch.stack([images[ei][t] for ei, t in idx[pick]]).to(device).float() / 255.0
+            o2 = torch.stack([images[ei][t + k] for ei, t in idx[pick]]).to(device).float() / 255.0
+            a = torch.stack([acts[ei][t] for ei, t in idx[pick]]).to(device)
+            pa = inv(torch.cat([encoder(o1), encoder(o2)], dim=-1))
+            loss = F.mse_loss(pa, a)
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            opt.step()
+            tot += float(loss)
+        log(f"[enc] epoch {epoch+1}/{cfg.enc_epochs} inverse_act_mse={tot/steps:.4f}")
+    encoder.eval()
+    return encoder
+
+
+def train_encoder_vicreg(episodes: list[Episode], cfg: Config, device: str, log=print):
     """Augmentation-VICReg: two photometric views of the SAME frame are pulled
     together (invariance), variance/covariance spread DIFFERENT frames apart. The
     only thing varying across frames is ball position, so the encoder encodes it;
@@ -52,8 +105,7 @@ def train_encoder(episodes: list[Episode], cfg: Config, device: str, log=print) 
     images = [torch.from_numpy(e.images) for e in episodes]  # uint8 (T,3,H,W)
     flat = np.asarray([(ei, t) for ei, e in enumerate(episodes)
                        for t in range(e.images.shape[0])])
-    encoder = Encoder(cfg.img_size, cfg.latent_dim, cfg.enc_channels,
-                      normalize=cfg.normalize_latent).to(device)
+    encoder = make_encoder(cfg, device)
     opt = torch.optim.AdamW(encoder.parameters(), lr=cfg.enc_lr)
     steps = max(1, len(flat) // cfg.batch_size)
     log(f"[enc] aug-VICReg frames={len(flat)} steps/epoch={steps} device={device}")

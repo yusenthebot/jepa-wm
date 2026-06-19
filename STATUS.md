@@ -1,17 +1,20 @@
 # STATUS — jepa-wm
 
-Round: 1 (FLOOR) — VERIFIED ✓  | Mode: evolving / frontier
-Updated: 2026-06-19
+Round: 2 (FRONTIER, distractor-robust) — VERIFIED ✓  | Mode: evolving / frontier
+Updated: 2026-06-19  | public: github.com/yusenthebot/jepa-wm
 
 ## Goal (floor, not ceiling)
-JEPA-style low-compute world model on PointMaze: CNN encoder + GRU latent predictor,
-predict next latent (no pixel reconstruction in the loss), CEM-MPC plans in latent
-space. Close the loop: encode -> latent rollout -> plan -> real env success rate.
+JEPA-style low-compute world model on PointMaze: CNN/keypoint encoder + GRU latent
+predictor, predict next latent (no pixel reconstruction in the loss), CEM-MPC plans in
+latent space. Close the loop: encode -> latent rollout -> plan -> real env success.
 Ship every round: (1) imagined-rollout GIF (detached decoder), (2) performance curve.
 
-## Round 1 result (verified by REAL planning success, not loss)
-planner success 0.62 vs random 0.12 | latent-spatial corr 0.42 | probe R² 0.77
-| RankMe 8.0/8 (no collapse) | rollout MSE 0.007 | ~2.3 min on MPS.
+## Results (verified by REAL planning success, not loss)
+- Round 1 FLOOR (big ball): planner 0.62 vs random 0.12 | corr 0.42 | probe R² 0.77 | RankMe 8/8.
+- Round 2 FRONTIER (HARD small distractor ball): planner 0.50 vs random 0.12 | corr 0.69
+  | probe R² 0.89 | RankMe 6.75/8. Mechanism = spatial-softmax keypoints + multi-step
+  inverse dynamics (ACRO, k=24). Corr/probe went UP on a HARDER obs = real progress.
+  Presets: --preset floor (R1) / --preset distractor (R2).
 
 ## Final architecture (what actually works)
 - Encoder: augmentation-VICReg (photometric views), latent_dim=8, FROZEN after training.
@@ -29,11 +32,14 @@ planner success 0.62 vs random 0.12 | latent-spatial corr 0.42 | probe R² 0.77
   (supervised probe R²=0.999 though). Fixed by enlarging the ball.
 
 ## Next (frontier round candidates)
-1. Shrink the ball back -> distractor-robust representation (the hard open part).
-2. Push corr higher (better encoder / whitened planning metric) -> success > 0.8.
-3. Stochastic latent / SSM predictor / rollout curriculum / harder mazes.
+1. Push small-ball success past the floor (longer inverse horizon, forward+inverse combo,
+   or whitened planning metric) -> success > 0.62 on the hard obs.
+2. Stochastic/variational latent dynamics (multimodal futures).
+3. SSM/Mamba predictor; rollout-horizon curriculum; harder mazes (UMaze/Medium) needing
+   obstacle-aware planning (greedy latent-distance CEM will fail there -> learned value).
 
 ## Resume (cold start)
-Read progress.md + this file + git log. Run:
-  uv run python scripts/run_round.py --round 1 --tag r1-floor   (reproduce floor)
-  uv run python scripts/sweep_latent_dim.py 4,8,16,32           (latent-dim study)
+Read progress.md + this file + git log. Run with .venv/bin/python (NOT uv run on the
+flaky net). Reproduce:
+  scripts/run_round.py --round 1 --tag r1-floor                      (big-ball floor)
+  scripts/run_round.py --round 2 --tag r2-distractor --preset distractor  (small-ball)

@@ -22,7 +22,9 @@ def closed_loop_eval(encoder, predictor, cfg: Config, device: str,
                      capture_traj: bool = True, log=print):
     encoder.eval(); predictor.eval()
     env = PointMazePixels(cfg.env_id, img_size=cfg.img_size,
-                          max_episode_steps=cfg.max_episode_steps)
+                          max_episode_steps=cfg.max_episode_steps,
+                          cam_distance=cfg.cam_distance,
+                          enlarge_agent=cfg.enlarge_agent, agent_size=cfg.agent_size)
     planner = CEMPlanner(
         predictor, horizon=cfg.plan_horizon, iters=cfg.cem_iters,
         samples=cfg.cem_samples, elite_frac=cfg.cem_elite_frac,
@@ -61,7 +63,9 @@ def closed_loop_eval(encoder, predictor, cfg: Config, device: str,
 @torch.no_grad()
 def random_baseline(cfg: Config, n_episodes: int, seed_offset: int = 20_000):
     env = PointMazePixels(cfg.env_id, img_size=cfg.img_size,
-                          max_episode_steps=cfg.max_episode_steps)
+                          max_episode_steps=cfg.max_episode_steps,
+                          cam_distance=cfg.cam_distance,
+                          enlarge_agent=cfg.enlarge_agent, agent_size=cfg.agent_size)
     rng = np.random.default_rng(123)
     succ = []
     for ep in range(n_episodes):
